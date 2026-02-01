@@ -1,5 +1,7 @@
 # Go Agent SDK
 
+<img width="750" height="298" alt="Screenshot 2026-02-01 at 17-22-37 golang mascot - Google Search" src="https://github.com/user-attachments/assets/74b9a2f1-0c7d-4941-be64-7bf999d6c3b3" />
+
 A minimal, high-performance Go SDK for building AI agents from first principles.
 
 This project is a lightweight, type-safe framework for building LLM-powered agents in Go. It avoids heavy dependencies, using only `net/http`, `encoding/json`, and `reflect` to provide a clean, idiomatic Go experience.
