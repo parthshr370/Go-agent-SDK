@@ -13,6 +13,7 @@ This project is a lightweight, type-safe framework for building LLM-powered agen
 - **Functional Options Pattern**: Clean and extensible agent configuration.
 - **Multi-Turn Conversations**: Automatic history management for seamless back-and-forth interactions.
 - **Robust Tool Calling Loop**: Handles parallel tool calls, errors, and recursive LLM responses.
+- **Callback System**: Optional debug logging to see raw JSON at every step (LLM requests, responses, tool calls, tool results).
 - **OpenRouter Integration**: Ready to use with any model supported by OpenRouter (OpenAI, Gemini, Claude, etc.).
 
 ## Architecture
@@ -90,7 +91,7 @@ func main() {
 
 ## Project Structure
 
-- `agent/`: Core `Agent` orchestrator and interaction loop.
+- `agent/`: Core `Agent` orchestrator, interaction loop, and callback system.
 - `llm/`: API client, message types, and OpenRouter integration.
 - `tools/`: Tool registry and reflection-based execution.
 - `tools/jsonschema/`: Automatic JSON Schema generation from Go structs.

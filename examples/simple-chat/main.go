@@ -26,6 +26,7 @@ func main() {
 	myAgent := agent.New(client, "google/gemini-3-flash-preview",
 		agent.WithSystemPrompts("You are a helpful assistant. Keep responses concise."),
 		agent.WithMaxRetries(3),
+		agent.WithCallback(&agent.DebugCallback{}), // remove this if you do not want detailed json output
 	)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)

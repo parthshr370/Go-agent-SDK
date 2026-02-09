@@ -47,6 +47,7 @@ func main() {
 
 	myAgent := agent.New(client, "google/gemini-3-flash-preview",
 		agent.WithSystemPrompts("You are a helpful assistant with access to a fact database. Use the lookup tool when asked about programming languages."),
+		agent.WithCallback(&agent.DebugCallback{}), // Uncomment this when you need to add verbose json logging on what is happening internally
 	)
 
 	// Register the tool - the framework introspects the function signature

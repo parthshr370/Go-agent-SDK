@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go-agent-sdk/llm"
 	"go-agent-sdk/tools"
+	"time"
 )
 
 // Agent is the orchestrator that manages the conversation with an LLM.
@@ -19,6 +20,7 @@ type Agent struct {
 	Model        string          // Which model to use (e.g., "google/gemini-3-flash-preview")
 	History      []llm.Message   // The conversation so far
 	tools        *tools.Registry // Registered tools the LLM can call
+	callback     Callback        // optional observer, fires at key moments during Run(). nil means silent.
 }
 
 // Option is a function that configures an Agent.
@@ -97,6 +99,24 @@ func (a *Agent) RegisterTool(name, description string, fn any) error {
 	return a.tools.Register(name, description, fn)
 }
 
+// WithCallback attaches an observer to the agent's internal execution.
+// When set, the agent calls the callback methods at key moments during Run() -
+// before/after LLM calls and before/after tool executions.
+// This is how you see the raw JSON flowing through the system.
+//
+// Pass nil or just don't use this option to keep the agent silent.
+//
+// Example - see everything:
+//
+//	agent := agent.New(client, "gpt-4",
+//	    agent.WithCallback(&agent.DebugCallback{}),
+//	)
+func WithCallback(cb Callback) Option {
+	return func(a *Agent) {
+		a.callback = cb
+	}
+}
+
 // Run sends a message to the LLM and returns the response.
 // It handles the full conversation flow including history management and tool execution.
 //
@@ -127,11 +147,11 @@ func (a *Agent) RegisterTool(name, description string, fn any) error {
 // Example tool calling flow:
 //
 //	User: "What's the weather in Paris?"
-//	→ LLM: ToolCall{ID: "call_123", Name: "get_weather", Args: "{\"city\": \"Paris\"}"}
-//	→ Execute: get_weather(city="Paris") → "Sunny, 22°C"
-//	→ Add ToolResult{tool_call_id: "call_123", content: "Sunny, 22°C"} to history
-//	→ Recurse
-//	→ LLM: "It's sunny and 22°C in Paris right now!"
+//	LLM decides to call get_weather with {"city": "Paris"}
+//	We execute get_weather - returns "Sunny, 22C"
+//	We add the tool result to history, linked by tool_call_id
+//	We recurse - call Run("") so the LLM sees the result
+//	LLM sees the tool result and responds: "It's sunny and 22C in Paris!"
 //
 // Example:
 //
@@ -156,9 +176,23 @@ func (a *Agent) Run(ctx context.Context, usrMsg string) (string, error) {
 		Temperature: 0.7, // Hardcoded for now - could make this configurable
 	}
 
+	// let the callback see the full request before we send it
+	if a.callback != nil {
+		a.callback.OnLLMRequest(req)
+	}
+
+	// track how long the LLM takes to respond
+	start := time.Now()
 	resp, err := a.client.CreateChat(ctx, req)
+	latency := time.Since(start)
+
 	if err != nil {
 		return "", fmt.Errorf("LLM call failed: %w", err)
+	}
+
+	// let the callback see the full response and how long it took
+	if a.callback != nil {
+		a.callback.OnLLMResponse(*resp, latency)
 	}
 
 	if len(resp.Choices) == 0 {
@@ -179,7 +213,21 @@ func (a *Agent) Run(ctx context.Context, usrMsg string) (string, error) {
 		// Execute each tool the LLM requested.
 		// The LLM can request multiple tools in parallel (though we execute sequentially).
 		for _, call := range choice.Message.ToolCalls {
+
+			// let the callback see which tool is about to run and what args the LLM sent
+			if a.callback != nil {
+				a.callback.OnToolCall(call.Function.Name, call.Function.Arguments)
+			}
+
+			// run the tool and track how long it takes
+			toolStart := time.Now()
 			result, err := a.tools.Execute(call.Function.Name, call.Function.Arguments)
+			toolLatency := time.Since(toolStart)
+
+			// let the callback see the outcome - result or error
+			if a.callback != nil {
+				a.callback.OnToolResult(call.Function.Name, result, err, toolLatency)
+			}
 
 			var toolMsg llm.Message
 			if err != nil {

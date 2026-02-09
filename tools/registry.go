@@ -106,9 +106,9 @@ func (r *Registry) Register(name string, description string, function any) error
 //   - We convert each ToolDefinition to llm.Tool, setting Type to "function"
 //
 // The conversion:
-//   - Name → Function.Name
-//   - Description → Function.Description
-//   - Schema → Function.Parameters (this is the JSON Schema describing args)
+//   - Name becomes Function.Name
+//   - Description becomes Function.Description
+//   - Schema becomes Function.Parameters (the JSON Schema describing args)
 //   - Type is always "function" (OpenAI's terminology for callable tools)
 //
 // If no tools are registered, returns an empty slice (not nil) to avoid
