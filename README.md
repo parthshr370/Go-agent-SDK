@@ -2,37 +2,17 @@
 
 <img width="750" height="298" alt="Screenshot 2026-02-01 at 17-22-37 golang mascot - Google Search" src="https://github.com/user-attachments/assets/74b9a2f1-0c7d-4941-be64-7bf999d6c3b3" />
 
-A minimal, high-performance Go SDK for building AI agents from first principles.
-
-This project is a lightweight, type-safe framework for building LLM-powered agents in Go. It avoids heavy dependencies, using only `net/http`, `encoding/json`, and `reflect` to provide a clean, idiomatic Go experience.
+A minimal Go SDK for building AI agents from first principles. Zero external dependencies — just `net/http`, `encoding/json`, and `reflect`.
 
 ## Features
 
-- **Minimalistic Core**: Built using pure Go standard library (no official SDKs required).
-- **Type-Safe Tool System**: Automatically generate JSON Schemas from Go structs using reflection.
-- **Functional Options Pattern**: Clean and extensible agent configuration.
-- **Multi-Turn Conversations**: Automatic history management for seamless back-and-forth interactions.
-- **Robust Tool Calling Loop**: Handles parallel tool calls, errors, and recursive LLM responses.
-- **Callback System**: Optional debug logging to see raw JSON at every step (LLM requests, responses, tool calls, tool results).
-- **OpenRouter Integration**: Ready to use with any model supported by OpenRouter (OpenAI, Gemini, Claude, etc.).
-
-## Architecture
-
-The SDK is organized into three distinct layers:
-
-1.  **LLM Provider (`llm/`)**: Handles the raw API communication, type-safe requests/responses, and message factories.
-2.  **Tool System (`tools/`)**: Manages tool registration, JSON Schema generation, and the reflection-based execution pipeline.
-3.  **Agent Orchestrator (`agent/`)**: The main interaction loop that coordinates between the user, the LLM, and the tool registry.
+- **Multi-provider**: Swap between OpenAI, Anthropic, Gemini, or any OpenAI-compatible endpoint (OpenRouter, Ollama, Azure) by changing one line
+- **Type-safe tools**: Register plain Go functions as tools — JSON Schema is generated automatically from your structs
+- **Conversation memory**: Multi-turn history managed for you
+- **Callback system**: Optional observer to see the raw JSON at every step (requests, responses, tool calls, results)
+- **No dependencies**: Pure standard library, Go 1.24+
 
 ## Quick Start
-
-### Installation
-
-```bash
-go get github.com/yourusername/go-agent-sdk
-```
-
-### Basic Usage
 
 ```go
 package main
@@ -44,32 +24,33 @@ import (
 	"os"
 
 	"go-agent-sdk/agent"
-	"go-agent-sdk/llm"
+	"go-agent-sdk/llm/openai"
+	// "go-agent-sdk/llm/anthropic"
+	// "go-agent-sdk/llm/gemini"
 )
 
 func main() {
-	apiKey := os.Getenv("OPENROUTER_API_KEY")
-	client := llm.NewClient(apiKey)
+	// Pick your provider (uncomment one):
+	provider := openai.NewOpenRouter(os.Getenv("OPENROUTER_API_KEY"), "google/gemini-3-flash-preview")
+	// provider := openai.New(os.Getenv("OPENAI_API_KEY"), "gpt-4o")
+	// provider := anthropic.New(os.Getenv("ANTHROPIC_API_KEY"), "claude-sonnet-4-20250514")
+	// provider := gemini.New(os.Getenv("GEMINI_API_KEY"), "gemini-2.5-flash")
 
-	// Create a new agent
-	chatAgent := agent.New(client, "google/gemini-3-flash-preview",
+	a := agent.New(provider,
 		agent.WithSystemPrompts("You are a helpful assistant."),
 	)
 
-	// Run the agent
-	ctx := context.Background()
-	reply, err := chatAgent.Run(ctx, "Explain Go in one sentence.")
+	reply, err := a.Run(context.Background(), "Explain Go in one sentence.")
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	fmt.Printf("Agent: %s\n", reply)
+	fmt.Println(reply)
 }
 ```
 
-### Adding Tools
+## Adding Tools
 
-Tools are just regular Go functions. The framework uses reflection to map LLM arguments to your struct fields.
+Tools are regular Go functions. The SDK inspects your struct's `json` and `description` tags to generate the schema the LLM sees.
 
 ```go
 type WeatherArgs struct {
@@ -80,23 +61,109 @@ func GetWeather(args WeatherArgs) string {
 	return fmt.Sprintf("It's sunny in %s!", args.City)
 }
 
-func main() {
-    // ... setup agent ...
-    agent.RegisterTool("get_weather", "Get current weather", GetWeather)
-    
-    reply, err := agent.Run(ctx, "What is the weather in London?")
-    // Agent will automatically call GetWeather and incorporate the result!
-}
+// Register it on any agent:
+a.RegisterTool("get_weather", "Get current weather", GetWeather)
+
+reply, err := a.Run(ctx, "What is the weather in London?")
+// The agent calls GetWeather automatically and incorporates the result.
+```
+
+## Provider Setup
+
+Every provider implements `llm.ChatProvider` (two methods: `CreateChat` and `ModelName`). The agent depends on the interface, not on any concrete client.
+
+**Native providers** (each has its own translation layer):
+
+```go
+// OpenAI / OpenRouter
+provider := openai.New(apiKey, "gpt-4o")
+provider := openai.NewOpenRouter(apiKey, "google/gemini-3-flash-preview")
+
+// Anthropic
+provider := anthropic.New(apiKey, "claude-sonnet-4-20250514")
+
+// Gemini
+provider := gemini.New(apiKey, "gemini-2.5-flash")
+```
+
+**OpenAI-compatible services** — many providers speak the same wire format. Use `openai.New` with `WithBaseURL` and your provider's API key:
+
+```go
+// Groq (fast inference)
+provider := openai.New(apiKey, "llama-3.3-70b-versatile", openai.WithBaseURL(openai.GroqBaseURL))
+
+// DeepSeek
+provider := openai.New(apiKey, "deepseek-chat", openai.WithBaseURL(openai.DeepSeekBaseURL))
+
+// Together AI
+provider := openai.New(apiKey, "meta-llama/Llama-3-70b-chat-hf", openai.WithBaseURL(openai.TogetherBaseURL))
+
+// Local Ollama
+provider := openai.New("", "llama3", openai.WithBaseURL("http://localhost:11434/v1"))
+```
+
+All available base URL constants:
+
+| Constant | URL | Notes |
+|----------|-----|-------|
+| `openai.DefaultBaseURL` | `https://api.openai.com/v1` | OpenAI direct |
+| `openai.OpenRouterBaseURL` | `https://openrouter.ai/api/v1` | 300+ models, any provider |
+| `openai.GroqBaseURL` | `https://api.groq.com/openai/v1` | Fast inference |
+| `openai.CerebrasBaseURL` | `https://api.cerebras.ai/v1` | Wafer-scale speed |
+| `openai.FireworksBaseURL` | `https://api.fireworks.ai/inference/v1` | Fine-tuned + open-source models |
+| `openai.TogetherBaseURL` | `https://api.together.xyz/v1` | 100+ open-source models |
+| `openai.AnyscaleBaseURL` | `https://api.endpoints.anyscale.com/v1` | Scalable fine-tuned endpoints |
+| `openai.DeepSeekBaseURL` | `https://api.deepseek.com/v1` | Reasoning + coding |
+| `openai.MistralBaseURL` | `https://api.mistral.ai/v1` | Mistral models |
+| `openai.MoonshotBaseURL` | `https://api.moonshot.ai/v1` | Kimi series, long context |
+| `openai.DashScopeBaseURL` | `https://dashscope-intl.aliyuncs.com/compatible-mode/v1` | Alibaba Qwen models |
+| `openai.ZAIBaseURL` | `https://api.z.ai/v1` | Zhipu GLM-4 series |
+
+Any provider not listed here can still be used — just pass the URL string directly to `WithBaseURL`.
+
+## Debug Logging
+
+Pass `DebugCallback` to see the full JSON at every step:
+
+```go
+a := agent.New(provider,
+	agent.WithCallback(&agent.DebugCallback{}),
+)
 ```
 
 ## Project Structure
 
-- `agent/`: Core `Agent` orchestrator, interaction loop, and callback system.
-- `llm/`: API client, message types, and OpenRouter integration.
-- `tools/`: Tool registry and reflection-based execution.
-- `tools/jsonschema/`: Automatic JSON Schema generation from Go structs.
-- `examples/`: Standalone examples for various use cases.
+```
+llm/
+├── provider.go          # ChatProvider interface (the contract)
+├── types.go             # Common request/response types (OpenAI-shaped)
+├── messages.go          # Message constructors
+├── openai/client.go     # OpenAI + OpenRouter provider
+├── anthropic/client.go  # Anthropic provider (full translation layer)
+└── gemini/client.go     # Gemini provider (full translation layer)
+agent/
+├── agent.go             # Run() loop, depends on ChatProvider
+└── callback.go          # Observer pattern
+tools/
+├── registry.go          # Tool registration
+├── execution.go         # Reflection-based tool execution
+└── jsonschema/schema.go # Struct-to-JSON-Schema generator
+```
+
+## How Providers Work
+
+Each provider is a self-contained translator. The agent only sees common types:
+
+```
+Agent calls provider.CreateChat(common request)
+    provider.mapRequest(common → native)
+    HTTP POST to the provider's API
+    provider.mapResponse(native → common)
+    returns common response to agent
+```
+
+Adding a new provider means writing one file with native types + `mapRequest` + `mapResponse` + the HTTP call. Nothing else changes.
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+MIT License — see [LICENSE](LICENSE) for details.

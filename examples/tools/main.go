@@ -9,10 +9,12 @@ import (
 	"time"
 
 	"go-agent-sdk/agent"
-	"go-agent-sdk/llm"
+	"go-agent-sdk/llm/openai"
+	// "go-agent-sdk/llm/anthropic"
+	// "go-agent-sdk/llm/gemini"
 )
 
-// Tool calling example - shows how to register and use tools.
+// Tool calling example — shows how to register and use tools.
 // The SDK auto-generates JSON Schema from your struct definitions.
 
 // LookupArgs defines what the LLM needs to provide.
@@ -43,9 +45,14 @@ func main() {
 		log.Fatal("Set OPENROUTER_API_KEY environment variable")
 	}
 
-	client := llm.NewClient(apiKey)
+	// Pick your provider (uncomment one). See README for the full list.
+	provider := openai.NewOpenRouter(apiKey, "google/gemini-3-flash-preview")
+	// provider := openai.New(os.Getenv("OPENAI_API_KEY"), "gpt-4o")
+	// provider := anthropic.New(os.Getenv("ANTHROPIC_API_KEY"), "claude-sonnet-4-20250514")
+	// provider := gemini.New(os.Getenv("GEMINI_API_KEY"), "gemini-2.5-flash")
+	// provider := openai.New(os.Getenv("DEEPSEEK_API_KEY"), "deepseek-chat", openai.WithBaseURL(openai.DeepSeekBaseURL))
 
-	myAgent := agent.New(client, "google/gemini-3-flash-preview",
+	myAgent := agent.New(provider,
 		agent.WithSystemPrompts("You are a helpful assistant with access to a fact database. Use the lookup tool when asked about programming languages."),
 		agent.WithCallback(&agent.DebugCallback{}), // Uncomment this when you need to add verbose json logging on what is happening internally
 	)

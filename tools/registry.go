@@ -96,13 +96,13 @@ func (r *Registry) Register(name string, description string, function any) error
 	return nil
 }
 
-// GetAllTools converts internal tool definitions to the API format required by OpenRouter.
+// GetAllTools converts internal tool definitions to the API format required by the LLM.
 // The Registry stores tools as a map for fast lookup by name, but the API expects
 // a list (slice) of tools. This function performs that transformation.
 //
 // Why we need this:
 //   - Our internal storage uses map[string]ToolDefinition for O(1) lookups by name
-//   - OpenAI/OpenRouter expects []llm.Tool in the request body
+//   - The LLM provider expects []llm.Tool in the request body
 //   - We convert each ToolDefinition to llm.Tool, setting Type to "function"
 //
 // The conversion:
@@ -117,7 +117,7 @@ func (r *Registry) GetAllTools() []llm.Tool {
 
 	// Initialize empty slice (not nil) - important for JSON marshaling
 	// A nil slice would marshal to "null", empty slice to "[]"
-	// OpenRouter expects either a valid array or no field at all
+	// LLM providers expect either a valid array or no field at all
 	result := make([]llm.Tool, 0)
 
 	// Iterate over all registered tool definitions

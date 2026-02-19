@@ -9,7 +9,9 @@ import (
 	"time"
 
 	"go-agent-sdk/agent"
-	"go-agent-sdk/llm"
+	"go-agent-sdk/llm/openai"
+	// "go-agent-sdk/llm/anthropic"
+	// "go-agent-sdk/llm/gemini"
 )
 
 // WeatherArgs defines what the LLM needs to provide to get weather info.
@@ -68,7 +70,14 @@ func main() {
 		log.Fatal("Set OPENROUTER_API_KEY environment variable")
 	}
 
-	client := llm.NewClient(apiKey)
+	// Pick your provider (uncomment one). See README for the full list.
+	provider := openai.NewOpenRouter(apiKey, "google/gemini-3-flash-preview")
+	// provider := openai.New(os.Getenv("OPENAI_API_KEY"), "gpt-4o")
+	// provider := anthropic.New(os.Getenv("ANTHROPIC_API_KEY"), "claude-sonnet-4-20250514")
+	// provider := gemini.New(os.Getenv("GEMINI_API_KEY"), "gemini-2.5-flash")
+	// provider := openai.New(os.Getenv("GROQ_API_KEY"), "llama-3.3-70b-versatile", openai.WithBaseURL(openai.GroqBaseURL))
+	// provider := openai.New(os.Getenv("DEEPSEEK_API_KEY"), "deepseek-chat", openai.WithBaseURL(openai.DeepSeekBaseURL))
+
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -78,7 +87,7 @@ func main() {
 	// Example 1: Simple chat without tools.
 	fmt.Println("--- Example 1: Simple Chat ---")
 
-	chatAgent := agent.New(client, "google/gemini-3-flash-preview",
+	chatAgent := agent.New(provider,
 		agent.WithSystemPrompts("You are a helpful assistant. Keep responses brief."),
 	)
 
@@ -91,7 +100,7 @@ func main() {
 	// Example 2: Register tools so the LLM can call them when needed.
 	fmt.Println("--- Example 2: Tool Calling ---")
 
-	toolAgent := agent.New(client, "google/gemini-3-flash-preview",
+	toolAgent := agent.New(provider,
 		agent.WithSystemPrompts("You are a helpful assistant with access to weather data and a calculator. Use them when needed."),
 	)
 
@@ -107,7 +116,7 @@ func main() {
 	// Example 3: Multi-turn conversation - the agent remembers previous messages.
 	fmt.Println("--- Example 3: Multi-Turn Conversation ---")
 
-	conversationAgent := agent.New(client, "google/gemini-3-flash-preview",
+	conversationAgent := agent.New(provider,
 		agent.WithSystemPrompts("You are a helpful assistant. Keep responses brief."),
 	)
 
