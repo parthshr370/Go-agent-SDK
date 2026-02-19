@@ -102,24 +102,17 @@ provider := openai.New(apiKey, "meta-llama/Llama-3-70b-chat-hf", openai.WithBase
 provider := openai.New("", "llama3", openai.WithBaseURL("http://localhost:11434/v1"))
 ```
 
-All available base URL constants:
+Some commonly used base URL constants:
 
-| Constant | URL | Notes |
-|----------|-----|-------|
-| `openai.DefaultBaseURL` | `https://api.openai.com/v1` | OpenAI direct |
-| `openai.OpenRouterBaseURL` | `https://openrouter.ai/api/v1` | 300+ models, any provider |
-| `openai.GroqBaseURL` | `https://api.groq.com/openai/v1` | Fast inference |
-| `openai.CerebrasBaseURL` | `https://api.cerebras.ai/v1` | Wafer-scale speed |
-| `openai.FireworksBaseURL` | `https://api.fireworks.ai/inference/v1` | Fine-tuned + open-source models |
-| `openai.TogetherBaseURL` | `https://api.together.xyz/v1` | 100+ open-source models |
-| `openai.AnyscaleBaseURL` | `https://api.endpoints.anyscale.com/v1` | Scalable fine-tuned endpoints |
-| `openai.DeepSeekBaseURL` | `https://api.deepseek.com/v1` | Reasoning + coding |
-| `openai.MistralBaseURL` | `https://api.mistral.ai/v1` | Mistral models |
-| `openai.MoonshotBaseURL` | `https://api.moonshot.ai/v1` | Kimi series, long context |
-| `openai.DashScopeBaseURL` | `https://dashscope-intl.aliyuncs.com/compatible-mode/v1` | Alibaba Qwen models |
-| `openai.ZAIBaseURL` | `https://api.z.ai/v1` | Zhipu GLM-4 series |
+| Constant | URL |
+|----------|-----|
+| `openai.DefaultBaseURL` | `https://api.openai.com/v1` |
+| `openai.OpenRouterBaseURL` | `https://openrouter.ai/api/v1` |
+| `openai.CerebrasBaseURL` | `https://api.cerebras.ai/v1` |
+| `openai.ZAIBaseURL` | `https://api.z.ai/v1` |
+| `openai.DeepSeekBaseURL` | `https://api.deepseek.com/v1` |
 
-Any provider not listed here can still be used — just pass the URL string directly to `WithBaseURL`.
+There are more (Groq, Fireworks, Together, Mistral, Moonshot, DashScope, Anyscale) — see [`llm/openai/client.go`](llm/openai/client.go) for the full list. Any URL can also be passed directly as a string to `WithBaseURL`.
 
 ## Debug Logging
 
@@ -149,20 +142,6 @@ tools/
 ├── execution.go         # Reflection-based tool execution
 └── jsonschema/schema.go # Struct-to-JSON-Schema generator
 ```
-
-## How Providers Work
-
-Each provider is a self-contained translator. The agent only sees common types:
-
-```
-Agent calls provider.CreateChat(common request)
-    provider.mapRequest(common → native)
-    HTTP POST to the provider's API
-    provider.mapResponse(native → common)
-    returns common response to agent
-```
-
-Adding a new provider means writing one file with native types + `mapRequest` + `mapResponse` + the HTTP call. Nothing else changes.
 
 ## License
 
