@@ -13,14 +13,17 @@ import (
 //
 // An Agent maintains state between calls - it remembers the conversation
 // so you can have multi-turn interactions without resending everything.
+//
+// The agent depends on llm.ChatProvider (an interface), not on any concrete
+// client. This lets you swap providers (OpenAI, Anthropic, Gemini, OpenRouter)
+// without changing agent code.
 type Agent struct {
-	client       *llm.Client     // Connection to OpenRouter
-	SystemPrompt string          // Instructions for the LLM's behavior
-	MaxRetries   int             // How many times to retry on failure
-	Model        string          // Which model to use (e.g., "google/gemini-3-flash-preview")
-	History      []llm.Message   // The conversation so far
-	tools        *tools.Registry // Registered tools the LLM can call
-	callback     Callback        // optional observer, fires at key moments during Run(). nil means silent.
+	provider     llm.ChatProvider // Any LLM backend that implements ChatProvider
+	SystemPrompt string           // Instructions for the LLM's behavior
+	MaxRetries   int              // How many times to retry on failure
+	History      []llm.Message    // The conversation so far
+	tools        *tools.Registry  // Registered tools the LLM can call
+	callback     Callback         // optional observer, fires at key moments during Run(). nil means silent.
 }
 
 // Option is a function that configures an Agent.
@@ -28,23 +31,32 @@ type Agent struct {
 // with sensible defaults while still allowing customization.
 type Option func(*Agent)
 
-// New creates an Agent with the given client and model.
+// New creates an Agent with the given provider.
+// The provider implements llm.ChatProvider and determines which LLM backend
+// is used (OpenAI, Anthropic, Gemini, OpenRouter, etc.).
 // Additional options can be passed to customize behavior.
 //
-// Example - create an agent with a system prompt:
+// Example - create an agent with OpenAI:
 //
-//	agent := agent.New(client, "google/gemini-3-flash-preview",
+//	provider := openai.New(os.Getenv("OPENAI_API_KEY"), "gpt-4o")
+//	agent := agent.New(provider,
 //	    agent.WithSystemPrompts("You are a helpful assistant"),
 //	    agent.WithMaxRetries(3),
 //	)
 //
+// Example - create an agent with OpenRouter:
+//
+//	provider := openai.NewOpenRouter(os.Getenv("OPENROUTER_API_KEY"), "google/gemini-3-flash-preview")
+//	agent := agent.New(provider,
+//	    agent.WithSystemPrompts("You are a helpful assistant"),
+//	)
+//
 // The variadic opts parameter (...Option) means you can pass zero or more options.
 // They're applied in order, so later options can override earlier ones.
-func New(client *llm.Client, model string, opts ...Option) *Agent {
+func New(provider llm.ChatProvider, opts ...Option) *Agent {
 	// Start with sensible defaults
 	a := &Agent{
-		client:     client,
-		Model:      model,
+		provider:   provider,
 		MaxRetries: 1,
 		History:    make([]llm.Message, 0),
 		tools:      tools.NewRegistry(),
@@ -108,7 +120,7 @@ func (a *Agent) RegisterTool(name, description string, fn any) error {
 //
 // Example - see everything:
 //
-//	agent := agent.New(client, "gpt-4",
+//	a := agent.New(provider,
 //	    agent.WithCallback(&agent.DebugCallback{}),
 //	)
 func WithCallback(cb Callback) Option {
@@ -166,11 +178,11 @@ func (a *Agent) Run(ctx context.Context, usrMsg string) (string, error) {
 	}
 
 	// Build the chat request including all available tools.
-	// Tools must be included in EVERY request - OpenRouter validates
+	// Tools must be included in EVERY request - most LLM providers validate
 	// the tool schema on each call, even when the LLM is responding
 	// to previous tool results.
 	req := llm.ChatRequest{
-		Model:       a.Model,
+		Model:       a.provider.ModelName(),
 		Messages:    a.History,
 		Tools:       a.tools.GetAllTools(),
 		Temperature: 0.7, // Hardcoded for now - could make this configurable
@@ -183,7 +195,7 @@ func (a *Agent) Run(ctx context.Context, usrMsg string) (string, error) {
 
 	// track how long the LLM takes to respond
 	start := time.Now()
-	resp, err := a.client.CreateChat(ctx, req)
+	resp, err := a.provider.CreateChat(ctx, req)
 	latency := time.Since(start)
 
 	if err != nil {
@@ -232,10 +244,10 @@ func (a *Agent) Run(ctx context.Context, usrMsg string) (string, error) {
 			var toolMsg llm.Message
 			if err != nil {
 				// Tool execution failed - tell the LLM so it can try again or explain
-				toolMsg = llm.NewToolError(call.ID, err)
+				toolMsg = llm.NewToolError(call.ID, call.Function.Name, err)
 			} else {
 				// Success - send the result back with the matching tool_call_id
-				toolMsg = llm.NewToolResult(call.ID, result)
+				toolMsg = llm.NewToolResult(call.ID, call.Function.Name, result)
 			}
 			a.History = append(a.History, toolMsg)
 		}

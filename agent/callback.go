@@ -16,7 +16,7 @@ import (
 // of these methods. If you don't set one, nothing happens - zero overhead.
 //
 // There are 4 moments the agent reports on:
-//   - OnLLMRequest: right before we send the request to OpenRouter
+//   - OnLLMRequest: right before we send the request to the LLM provider
 //   - OnLLMResponse: right after we get the response back
 //   - OnToolCall: when the LLM asks us to run a tool, before we run it
 //   - OnToolResult: after the tool finishes, with the result or error
@@ -37,14 +37,14 @@ type Callback interface {
 // This is the quickest way to see what's happening inside the agent.
 // Just pass it when creating the agent:
 //
-//	a := agent.New(client, "gpt-4", agent.WithCallback(&agent.DebugCallback{}))
+//	a := agent.New(provider, agent.WithCallback(&agent.DebugCallback{}))
 //
 // When the agent runs, you'll see the full ChatRequest JSON before each LLM call,
 // the full ChatResponse JSON after, and every tool call with its arguments and result.
 type DebugCallback struct{}
 
 // OnLLMRequest prints the full ChatRequest as indented JSON.
-// This shows you exactly what we're sending to OpenRouter - the model,
+// This shows you exactly what we're sending to the LLM provider - the model,
 // all messages in the conversation history, all registered tools, and
 // the temperature setting.
 func (d *DebugCallback) OnLLMRequest(req llm.ChatRequest) {
@@ -53,7 +53,7 @@ func (d *DebugCallback) OnLLMRequest(req llm.ChatRequest) {
 }
 
 // OnLLMResponse prints the full ChatResponse as indented JSON.
-// This shows what OpenRouter sent back - the finish_reason (did it want
+// This shows what the LLM provider sent back - the finish_reason (did it want
 // to call tools or is it a final answer?), the message content or tool_calls
 // array, and token usage for cost tracking.
 func (d *DebugCallback) OnLLMResponse(resp llm.ChatResponse, latency time.Duration) {

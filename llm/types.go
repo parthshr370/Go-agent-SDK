@@ -1,6 +1,6 @@
 package llm
 
-// ChatRequest is what we send to the OpenRouter API.
+// ChatRequest is what we send to the LLM provider.
 // It contains everything the LLM needs to generate a response.
 //
 // The `omitempty` tag on optional fields means they won't be sent
@@ -87,7 +87,7 @@ type FunctionCall struct {
 	Arguments string `json:"arguments"` // JSON string like "{\"city\": \"Paris\"}"
 }
 
-// ChatResponse is what we get back from the OpenRouter API.
+// ChatResponse is what we get back from the LLM provider.
 // It contains the LLM's reply along with metadata about the generation.
 type ChatResponse struct {
 	ID                string   `json:"id"`                           // Unique request ID

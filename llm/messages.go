@@ -48,10 +48,14 @@ func NewToolCallMessage(calls []ToolCall) Message {
 // the result using this function. The ToolCallID is crucial - it must match
 // the ID from the ToolCall that requested this execution, otherwise the LLM
 // won't know which tool result corresponds to which request.
-func NewToolResult(toolCallID string, output string) Message {
+//
+// The name parameter is the function name (e.g. "get_weather"). Some providers
+// (Gemini) require it in the tool result to link calls and responses.
+func NewToolResult(toolCallID string, name string, output string) Message {
 	return Message{
 		Role:       "tool",
 		ToolCallID: toolCallID,
+		Name:       name,
 		Content:    output,
 	}
 }
@@ -59,10 +63,11 @@ func NewToolResult(toolCallID string, output string) Message {
 // NewToolError creates a message indicating a tool failed to execute.
 // Use this when Execute returns an error - it formats the error nicely
 // and tells the LLM to fix its arguments.
-func NewToolError(toolCallID string, err error) Message {
+func NewToolError(toolCallID string, name string, err error) Message {
 	return Message{
 		Role:       "tool",
 		ToolCallID: toolCallID,
+		Name:       name,
 		Content:    fmt.Sprintf("Error executing tool: %v. Please fix your arguments.", err),
 	}
 }
