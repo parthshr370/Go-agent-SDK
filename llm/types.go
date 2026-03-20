@@ -8,7 +8,7 @@ package llm
 // This keeps the JSON payload clean and small.
 type ChatRequest struct {
 	// Required fields - these must always be present
-	Model    string    `json:"model"`    // The model ID, like "google/gemini-3-flash-preview"
+	Model    string    `json:"model"`    // The model ID, like "z-ai/glm-5"
 	Messages []Message `json:"messages"` // The conversation history
 
 	// Optional Configuration

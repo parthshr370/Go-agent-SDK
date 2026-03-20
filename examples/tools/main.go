@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"go-agent-sdk/agent"
-	"go-agent-sdk/llm/openai"
+	"go-agent-sdk/llm/gemini"
 	// "go-agent-sdk/llm/anthropic"
 	// "go-agent-sdk/llm/gemini"
 )
@@ -40,16 +40,16 @@ func LookupFact(args LookupArgs) string {
 }
 
 func main() {
-	apiKey := os.Getenv("OPENROUTER_API_KEY")
+	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
-		log.Fatal("Set OPENROUTER_API_KEY environment variable")
+		log.Fatal("Set GEMINI_API_KEY environment variable")
 	}
 
 	// Pick your provider (uncomment one). See README for the full list.
-	provider := openai.NewOpenRouter(apiKey, "google/gemini-3-flash-preview")
-	// provider := openai.New(os.Getenv("OPENAI_API_KEY"), "gpt-4o")
-	// provider := anthropic.New(os.Getenv("ANTHROPIC_API_KEY"), "claude-sonnet-4-20250514")
-	// provider := gemini.New(os.Getenv("GEMINI_API_KEY"), "gemini-2.5-flash")
+	//provider := openai.NewOpenRouter(apiKey, "z-ai/glm-5")
+	// provider := openai.New(os.Getenv("OPENAI_API_KEY"), "gpt-5.4-mini-2026-03-17")
+	// provider := anthropic.New(os.Getenv("ANTHROPIC_API_KEY"), "claude-sonnet-4-6")
+	provider := gemini.New(os.Getenv("GEMINI_API_KEY"), "gemini-3-flash-preview")
 	// provider := openai.New(os.Getenv("DEEPSEEK_API_KEY"), "deepseek-chat", openai.WithBaseURL(openai.DeepSeekBaseURL))
 
 	myAgent := agent.New(provider,

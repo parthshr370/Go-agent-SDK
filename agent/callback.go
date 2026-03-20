@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// Callback lets you observe what happens inside the agent during Run().
+// Callback lets you observe what happens inside the agent during Run() and RunStream().
 // Implement this interface to see the raw data at each step - the JSON
 // going to the LLM, what comes back, which tools get called, and what
 // they return.
@@ -15,11 +15,12 @@ import (
 // The agent checks if a callback is set (not nil) before calling any
 // of these methods. If you don't set one, nothing happens - zero overhead.
 //
-// There are 4 moments the agent reports on:
+// There are 5 moments the agent reports on:
 //   - OnLLMRequest: right before we send the request to the LLM provider
-//   - OnLLMResponse: right after we get the response back
+//   - OnLLMResponse: right after we get the response back (non-streaming only)
 //   - OnToolCall: when the LLM asks us to run a tool, before we run it
 //   - OnToolResult: after the tool finishes, with the result or error
+//   - OnStreamToken: each text token as it arrives during RunStream()
 //
 // You don't need to build your own - use DebugCallback for raw JSON output.
 // If you want custom behavior (metrics, file logging, etc), implement
@@ -29,6 +30,7 @@ type Callback interface {
 	OnLLMResponse(resp llm.ChatResponse, latency time.Duration)
 	OnToolCall(name string, args string)
 	OnToolResult(name string, result string, err error, latency time.Duration)
+	OnStreamToken(token string)
 }
 
 // DebugCallback is a built-in Callback that prints the raw JSON at every step.
@@ -77,4 +79,11 @@ func (d *DebugCallback) OnToolResult(name string, result string, err error, late
 	} else {
 		fmt.Printf("[DEBUG] Tool Result: %s - %s [%s]\n\n", name, result, latency)
 	}
+}
+
+// OnStreamToken prints each text token as it arrives during streaming.
+// This is what makes streaming visible -- tokens appear in real time
+// instead of the whole response appearing at once.
+func (d *DebugCallback) OnStreamToken(token string) {
+	fmt.Print(token)
 }

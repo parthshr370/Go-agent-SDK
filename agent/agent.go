@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go-agent-sdk/llm"
 	"go-agent-sdk/tools"
+	"io"
 	"time"
 )
 
@@ -38,7 +39,7 @@ type Option func(*Agent)
 //
 // Example - create an agent with OpenAI:
 //
-//	provider := openai.New(os.Getenv("OPENAI_API_KEY"), "gpt-4o")
+//	provider := openai.New(os.Getenv("OPENAI_API_KEY"), "gpt-5.4-mini-2026-03-17")
 //	agent := agent.New(provider,
 //	    agent.WithSystemPrompts("You are a helpful assistant"),
 //	    agent.WithMaxRetries(3),
@@ -46,7 +47,7 @@ type Option func(*Agent)
 //
 // Example - create an agent with OpenRouter:
 //
-//	provider := openai.NewOpenRouter(os.Getenv("OPENROUTER_API_KEY"), "google/gemini-3-flash-preview")
+//	provider := openai.NewOpenRouter(os.Getenv("OPENROUTER_API_KEY"), "z-ai/glm-5")
 //	agent := agent.New(provider,
 //	    agent.WithSystemPrompts("You are a helpful assistant"),
 //	)
@@ -267,4 +268,121 @@ func (a *Agent) Run(ctx context.Context, usrMsg string) (string, error) {
 
 	// Handle other finish reasons (should be rare but good to catch)
 	return "", fmt.Errorf("unexpected finish_reason: %s", finishReason)
+}
+
+// RunStream sends a message to the LLM and returns the response, streaming
+// tokens as they arrive. It has the same return type as Run() -- the streaming
+// is visible to the caller through the Callback.OnStreamToken method.
+//
+// The flow is the same as Run() with two differences:
+//  1. Uses CreateChatStream() instead of CreateChat() to get a StreamReader
+//  2. Reads events one at a time via Recv(), firing OnStreamToken for each text chunk
+//
+// Tool call rounds work identically to Run(): accumulate the full stream,
+// check if the LLM requested tools, execute them, loop again. The outer
+// loop uses iteration (not recursion like Run) because we're already
+// managing state with the Accumulator.
+//
+// The provider must implement llm.StreamProvider. If it doesn't (e.g.
+// Anthropic, Gemini which don't have streaming yet), RunStream returns
+// an error immediately.
+//
+// Example:
+//
+//	a := agent.New(provider, agent.WithCallback(&agent.DebugCallback{}))
+//	reply, err := a.RunStream(ctx, "What is the weather in Paris?")
+//	// tokens printed in real time via OnStreamToken, reply has the full text
+func (a *Agent) RunStream(ctx context.Context, usrMsg string) (string, error) {
+
+	// Add user message to history once, before the loop.
+	if usrMsg != "" {
+		a.History = append(a.History, llm.NewUserMessage(usrMsg))
+	}
+
+	// Check that the provider supports streaming.
+	sp, ok := a.provider.(llm.StreamProvider)
+	if !ok {
+		return "", fmt.Errorf("provider %T does not support streaming", a.provider)
+	}
+
+	// Outer loop: one iteration per LLM call. If the LLM requests tools,
+	// we execute them and go around again. If it returns text, we return.
+	for {
+		// Build a fresh request with the latest history (which now includes
+		// any tool results from the previous iteration).
+		req := llm.ChatRequest{
+			Model:       a.provider.ModelName(),
+			Messages:    a.History,
+			Tools:       a.tools.GetAllTools(),
+			Temperature: 0.7,
+		}
+
+		if a.callback != nil {
+			a.callback.OnLLMRequest(req)
+		}
+
+		stream, err := sp.CreateChatStream(ctx, req)
+		if err != nil {
+			return "", fmt.Errorf("LLM stream call failed: %w", err)
+		}
+
+		// Inner loop: read events from the stream one at a time.
+		// Each Recv() blocks until the next SSE chunk arrives.
+		var acc llm.Accumulator
+		for {
+			event, err := stream.Recv()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				stream.Close()
+				return "", fmt.Errorf("stream read failed: %w", err)
+			}
+
+			acc.Add(event)
+
+			// Fire callback on each text token so the caller sees them in real time.
+			if event.Type == llm.EventText && a.callback != nil {
+				a.callback.OnStreamToken(event.Text)
+			}
+		}
+		stream.Close()
+
+		// Stream is done. The Accumulator has the complete response.
+		// Add it to history (same Message type as the non-streaming path).
+		a.History = append(a.History, acc.Message())
+
+		// Check if the LLM requested tool calls.
+		if acc.HasToolCalls() {
+			// Execute each tool, same as Run().
+			for _, call := range acc.ToolCalls() {
+				if a.callback != nil {
+					a.callback.OnToolCall(call.Function.Name, call.Function.Arguments)
+				}
+
+				toolStart := time.Now()
+				result, toolErr := a.tools.Execute(call.Function.Name, call.Function.Arguments)
+				toolLatency := time.Since(toolStart)
+
+				if a.callback != nil {
+					a.callback.OnToolResult(call.Function.Name, result, toolErr, toolLatency)
+				}
+
+				var toolMsg llm.Message
+				if toolErr != nil {
+					toolMsg = llm.NewToolError(call.ID, call.Function.Name, toolErr)
+				} else {
+					toolMsg = llm.NewToolResult(call.ID, call.Function.Name, result)
+				}
+				a.History = append(a.History, toolMsg)
+			}
+
+			// Go around the outer loop again -- the LLM will see the tool
+			// results in history and (hopefully) respond with text this time.
+			continue
+		}
+
+		// No tool calls -- this is the final text response.
+		return acc.Text(), nil
+	}
 }

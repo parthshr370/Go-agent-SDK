@@ -6,10 +6,11 @@ A minimal Go SDK for building AI agents from first principles. Zero external dep
 
 ## Features
 
-- **Multi-provider**: Swap between OpenAI, Anthropic, Gemini, or any OpenAI-compatible endpoint (OpenRouter, Ollama, Azure) by changing one line
-- **Type-safe tools**: Register plain Go functions as tools — JSON Schema is generated automatically from your structs
+- **Multi-provider**: Swap between OpenAI, Anthropic, Gemini, or any OpenAI-compatible endpoint by changing one line
+- **Streaming**: Real-time token output via SSE — works with all three providers
+- **Type-safe tools**: Register plain Go functions as tools — JSON Schema generated from structs automatically
 - **Conversation memory**: Multi-turn history managed for you
-- **Callback system**: Optional observer to see the raw JSON at every step (requests, responses, tool calls, results)
+- **Callback system**: Observer to see raw JSON at every step, plus streaming token callbacks
 - **No dependencies**: Pure standard library, Go 1.24+
 
 ## Quick Start
@@ -31,10 +32,10 @@ import (
 
 func main() {
 	// Pick your provider (uncomment one):
-	provider := openai.NewOpenRouter(os.Getenv("OPENROUTER_API_KEY"), "google/gemini-3-flash-preview")
-	// provider := openai.New(os.Getenv("OPENAI_API_KEY"), "gpt-4o")
-	// provider := anthropic.New(os.Getenv("ANTHROPIC_API_KEY"), "claude-sonnet-4-20250514")
-	// provider := gemini.New(os.Getenv("GEMINI_API_KEY"), "gemini-2.5-flash")
+	provider := openai.NewOpenRouter(os.Getenv("OPENROUTER_API_KEY"), "z-ai/glm-5")
+	// provider := openai.New(os.Getenv("OPENAI_API_KEY"), "gpt-5.4-mini-2026-03-17")
+	// provider := anthropic.New(os.Getenv("ANTHROPIC_API_KEY"), "claude-sonnet-4-6")
+	// provider := gemini.New(os.Getenv("GEMINI_API_KEY"), "gemini-3-flash-preview")
 
 	a := agent.New(provider,
 		agent.WithSystemPrompts("You are a helpful assistant."),
@@ -68,51 +69,40 @@ reply, err := a.Run(ctx, "What is the weather in London?")
 // The agent calls GetWeather automatically and incorporates the result.
 ```
 
-## Provider Setup
+## Streaming
 
-Every provider implements `llm.ChatProvider` (two methods: `CreateChat` and `ModelName`). The agent depends on the interface, not on any concrete client.
-
-**Native providers** (each has its own translation layer):
+`RunStream()` works like `Run()` but tokens print as they arrive. Same return type, same tool call handling -- the streaming is visible through the callback.
 
 ```go
-// OpenAI / OpenRouter
-provider := openai.New(apiKey, "gpt-4o")
-provider := openai.NewOpenRouter(apiKey, "google/gemini-3-flash-preview")
+a := agent.New(provider,
+	agent.WithCallback(&agent.DebugCallback{}), // OnStreamToken prints each token
+)
 
-// Anthropic
-provider := anthropic.New(apiKey, "claude-sonnet-4-20250514")
-
-// Gemini
-provider := gemini.New(apiKey, "gemini-2.5-flash")
+reply, err := a.RunStream(ctx, "Explain goroutines in 2 sentences.")
+// Tokens appear in real time, reply has the complete text at the end.
 ```
 
-**OpenAI-compatible services** — many providers speak the same wire format. Use `openai.New` with `WithBaseURL` and your provider's API key:
+All three providers (OpenAI, Anthropic, Gemini) support streaming. Tool call rounds run automatically between stream rounds -- the agent accumulates the stream, detects tool calls, executes them, and streams the next response.
+
+## Providers
+
+Every provider implements `llm.ChatProvider`. The agent depends on the interface, not on any concrete client.
+
+| Provider | Constructor | Example Model |
+|----------|------------|---------------|
+| OpenAI | `openai.New(key, model)` | `gpt-5.4-mini-2026-03-17` |
+| OpenRouter | `openai.NewOpenRouter(key, model)` | `z-ai/glm-5` |
+| Anthropic | `anthropic.New(key, model)` | `claude-sonnet-4-6` |
+| Gemini | `gemini.New(key, model)` | `gemini-3-flash-preview` |
+
+Any OpenAI-compatible service works with `openai.New` + `WithBaseURL`:
 
 ```go
-// Groq (fast inference)
+// Groq, DeepSeek, Cerebras, Together, Ollama, etc.
 provider := openai.New(apiKey, "llama-3.3-70b-versatile", openai.WithBaseURL(openai.GroqBaseURL))
-
-// DeepSeek
-provider := openai.New(apiKey, "deepseek-chat", openai.WithBaseURL(openai.DeepSeekBaseURL))
-
-// Together AI
-provider := openai.New(apiKey, "meta-llama/Llama-3-70b-chat-hf", openai.WithBaseURL(openai.TogetherBaseURL))
-
-// Local Ollama
-provider := openai.New("", "llama3", openai.WithBaseURL("http://localhost:11434/v1"))
 ```
 
-Some commonly used base URL constants:
-
-| Constant | URL |
-|----------|-----|
-| `openai.DefaultBaseURL` | `https://api.openai.com/v1` |
-| `openai.OpenRouterBaseURL` | `https://openrouter.ai/api/v1` |
-| `openai.CerebrasBaseURL` | `https://api.cerebras.ai/v1` |
-| `openai.ZAIBaseURL` | `https://api.z.ai/v1` |
-| `openai.DeepSeekBaseURL` | `https://api.deepseek.com/v1` |
-
-There are more (Groq, Fireworks, Together, Mistral, Moonshot, DashScope, Anyscale) — see [`llm/openai/client.go`](llm/openai/client.go) for the full list. Any URL can also be passed directly as a string to `WithBaseURL`.
+Built-in base URLs: Groq, Cerebras, DeepSeek, Fireworks, Together, Mistral, Moonshot, DashScope, ZAI, Anyscale. See `llm/openai/client.go` for the full list.
 
 ## Debug Logging
 
@@ -127,20 +117,12 @@ a := agent.New(provider,
 ## Project Structure
 
 ```
-llm/
-├── provider.go          # ChatProvider interface (the contract)
-├── types.go             # Common request/response types (OpenAI-shaped)
-├── messages.go          # Message constructors
-├── openai/client.go     # OpenAI + OpenRouter provider
-├── anthropic/client.go  # Anthropic provider (full translation layer)
-└── gemini/client.go     # Gemini provider (full translation layer)
-agent/
-├── agent.go             # Run() loop, depends on ChatProvider
-└── callback.go          # Observer pattern
-tools/
-├── registry.go          # Tool registration
-├── execution.go         # Reflection-based tool execution
-└── jsonschema/schema.go # Struct-to-JSON-Schema generator
+llm/           Provider abstraction and common types
+├── openai/    OpenAI + OpenRouter + all compatible endpoints
+├── anthropic/ Anthropic Claude (Messages API translation)
+├── gemini/    Google Gemini (generateContent translation)
+agent/         Orchestrator: Run() loop, RunStream(), callbacks
+tools/         Reflection-based tool registration and execution
 ```
 
 ## License

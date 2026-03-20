@@ -56,7 +56,7 @@ type Client struct {
 //
 // Example:
 //
-//	client := openai.New(key, "gpt-4o",
+//	client := openai.New(key, "gpt-5.4-mini-2026-03-17",
 //	    openai.WithBaseURL(openai.OpenRouterBaseURL),
 //	    openai.WithHTTPClient(customClient),
 //	)
@@ -81,7 +81,7 @@ func WithBaseURL(url string) Option {
 //
 // Example — set a transport-level timeout:
 //
-//	client := openai.New(key, "gpt-4o",
+//	client := openai.New(key, "gpt-5.4-mini-2026-03-17",
 //	    openai.WithHTTPClient(&http.Client{
 //	        Timeout: 60 * time.Second,
 //	    }),
@@ -98,10 +98,10 @@ func WithHTTPClient(hc *http.Client) Option {
 // Examples:
 //
 //	// Direct OpenAI
-//	provider := openai.New(os.Getenv("OPENAI_API_KEY"), "gpt-4o")
+//	provider := openai.New(os.Getenv("OPENAI_API_KEY"), "gpt-5.4-mini-2026-03-17")
 //
 //	// OpenRouter (any model)
-//	provider := openai.New(os.Getenv("OPENROUTER_API_KEY"), "google/gemini-3-flash-preview",
+//	provider := openai.New(os.Getenv("OPENROUTER_API_KEY"), "z-ai/glm-5",
 //	    openai.WithBaseURL(openai.OpenRouterBaseURL),
 //	)
 //

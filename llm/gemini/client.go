@@ -163,7 +163,7 @@ func WithHTTPClient(hc *http.Client) Option {
 //
 // Example:
 //
-//	provider := gemini.New(os.Getenv("GEMINI_API_KEY"), "gemini-2.5-flash")
+//	provider := gemini.New(os.Getenv("GEMINI_API_KEY"), "gemini-3-flash-preview")
 //	agent := agent.New(provider)
 func New(apiKey string, model string, opts ...Option) *Client {
 	c := &Client{

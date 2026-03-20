@@ -30,3 +30,11 @@ type ChatProvider interface {
 	// providers don't need to worry about it — the agent handles it.
 	ModelName() string
 }
+
+// StreamProvider is an optional interface for providers that support streaming.
+// The agent type-asserts to this in [Agent.RunStream] -- if the provider
+// doesn't implement it, RunStream returns an error. Right now only the
+// OpenAI provider implements this. Anthropic and Gemini will follow.
+type StreamProvider interface {
+	CreateChatStream(ctx context.Context, req ChatRequest) (*StreamReader, error)
+}
