@@ -73,9 +73,10 @@ type FunctionDescription struct {
 // When the LLM decides it needs to use a function, it sends one of these
 // in the response's Message.ToolCalls field.
 type ToolCall struct {
-	ID       string       `json:"id"`       // Unique ID for this tool call (we need to echo it back)
-	Type     string       `json:"type"`     // Always "function"
-	Function FunctionCall `json:"function"` // Which function and with what arguments
+	ID               string       `json:"id"`                          // Unique ID for this tool call (we need to echo it back)
+	Type             string       `json:"type"`                        // Always "function"
+	Function         FunctionCall `json:"function"`                    // Which function and with what arguments
+	ThoughtSignature string       `json:"thought_signature,omitempty"` // Gemini 3 requires this round-tripped for function calls
 }
 
 // FunctionCall contains the specific function name and arguments.

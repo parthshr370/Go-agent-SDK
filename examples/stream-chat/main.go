@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"go-agent-sdk/agent"
-	"go-agent-sdk/llm/gemini"
+	"go-agent-sdk/llm/openai"
 	// "go-agent-sdk/llm/openai"
 	// "go-agent-sdk/llm/anthropic"
 )
@@ -18,14 +18,14 @@ import (
 // OnStreamToken method handles the real-time printing.
 
 func main() {
-	apiKey := os.Getenv("GEMINI_API_KEY")
+	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	if apiKey == "" {
 		log.Fatal("Set GEMINI_API_KEY environment variable")
 	}
 
 	// Pick your provider (uncomment one). All three support streaming.
-	provider := gemini.New(apiKey, "gemini-3-flash-preview")
-	// provider := openai.NewOpenRouter(os.Getenv("OPENROUTER_API_KEY"), "z-ai/glm-5")
+	//provider := gemini.New(apiKey, "gemini-3-flash-preview")
+	provider := openai.NewOpenRouter(os.Getenv("OPENROUTER_API_KEY"), "z-ai/glm-5")
 	// provider := openai.New(os.Getenv("OPENAI_API_KEY"), "gpt-5.4-mini-2026-03-17")
 	// provider := anthropic.New(os.Getenv("ANTHROPIC_API_KEY"), "claude-sonnet-4-6")
 

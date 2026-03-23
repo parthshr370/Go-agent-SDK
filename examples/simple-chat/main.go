@@ -17,9 +17,9 @@ import (
 // Creates an agent and sends a single message without any tools.
 
 func main() {
-	apiKey := os.Getenv("ANTHROPIC_API_KEY")
+	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
-		log.Fatal("Set ANTHROPIC_API_KEY environment variable")
+		log.Fatal("Set GEMINI_API_KEY= environment variable")
 	}
 
 	// Pick your provider (uncomment one). See README for the full list.

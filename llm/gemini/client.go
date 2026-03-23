@@ -54,10 +54,14 @@ type geminiContent struct {
 
 // gPart is the union type for content parts. One content can mix text,
 // functionCall, and functionResponse parts in the same array.
+// Gemini 3 models return a thoughtSignature alongside functionCall parts.
+// We must capture it and send it back when replaying history, or the API
+// rejects the request with a 400.
 type gPart struct {
 	Text             string             `json:"text,omitempty"`
 	FunctionCall     *gFunctionCall     `json:"functionCall,omitempty"`
 	FunctionResponse *gFunctionResponse `json:"functionResponse,omitempty"`
+	ThoughtSignature string             `json:"thoughtSignature,omitempty"`
 }
 
 // gFunctionCall is a tool invocation from the model.
@@ -235,6 +239,7 @@ func mapRequest(req llm.ChatRequest) geminiRequest {
 							Name: call.Function.Name,
 							Args: argsObj,
 						},
+						ThoughtSignature: call.ThoughtSignature,
 					})
 				}
 
@@ -344,6 +349,7 @@ func mapResponse(resp geminiResponse) *llm.ChatResponse {
 					Name:      part.FunctionCall.Name,
 					Arguments: string(argsJSON),
 				},
+				ThoughtSignature: part.ThoughtSignature,
 			})
 		}
 	}
