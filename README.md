@@ -9,6 +9,7 @@ A minimal Go SDK for building AI agents from first principles. Zero external dep
 - **Multi-provider**: Swap between OpenAI, Anthropic, Gemini, or any OpenAI-compatible endpoint by changing one line
 - **Streaming**: Real-time token output via SSE — works with all three providers
 - **Type-safe tools**: Register plain Go functions as tools — JSON Schema generated from structs automatically
+- **Structured output**: `NewTyped[T]` returns validated Go structs through the tool-calling loop
 - **Conversation memory**: Multi-turn history managed for you
 - **Callback system**: Observer to see raw JSON at every step, plus streaming token callbacks
 - **No dependencies**: Pure standard library, Go 1.24+
@@ -83,6 +84,42 @@ reply, err := a.RunStream(ctx, "Explain goroutines in 2 sentences.")
 ```
 
 All three providers (OpenAI, Anthropic, Gemini) support streaming. Tool call rounds run automatically between stream rounds -- the agent accumulates the stream, detects tool calls, executes them, and streams the next response.
+
+## Structured Output
+
+Use `NewTyped[T]` when you want the agent to return a Go struct instead of a raw string.
+
+```go
+type MovieInfo struct {
+	Title    string   `json:"title"`
+	Director string   `json:"director"`
+	Year     int      `json:"year"`
+	Genres   []string `json:"genres"`
+}
+
+a := agent.NewTyped[MovieInfo](provider,
+	agent.WithSystemPrompts("You are a movie database assistant."),
+)
+
+movie, err := a.Run(ctx, "Tell me about Inception.")
+if err != nil {
+	log.Fatal(err)
+}
+
+fmt.Println(movie.Title, movie.Year)
+```
+
+How it works:
+- the SDK builds a JSON Schema from `T`
+- injects a fake `final_result` tool using that schema
+- the model calls `final_result` with structured arguments
+- the SDK intercepts the call and unmarshals the arguments into `T`
+
+Current status:
+- tool-based structured output is implemented
+- plain `New()` still returns `string`
+- native provider-level structured output (`response_format: json_schema`) is not implemented yet
+- see `examples/structured-output/main.go` for a full example
 
 ## Providers
 

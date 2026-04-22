@@ -33,7 +33,26 @@ type geminiRequest struct {
 	Contents          []geminiContent    `json:"contents"`
 	SystemInstruction *systemInstruction `json:"systemInstruction,omitempty"`
 	Tools             []geminiTool       `json:"tools,omitempty"`
+	ToolConfig        *toolConfig        `json:"toolConfig,omitempty"`
 	GenerationConfig  *generationConfig  `json:"generationConfig,omitempty"`
+}
+
+// toolConfig controls how the model uses available tools.
+// Gemini's equivalent of OpenAI's tool_choice field, but nested differently.
+type toolConfig struct {
+	FunctionCallingConfig functionCallingConfig `json:"functionCallingConfig"`
+}
+
+// functionCallingConfig sets the function-calling mode and optional name allowlist.
+//
+// Modes:
+//
+//	AUTO - model decides when to call functions (default)
+//	ANY  - model must call some function; AllowedFunctionNames restricts which
+//	NONE - model must not call any functions
+type functionCallingConfig struct {
+	Mode                 string   `json:"mode"`
+	AllowedFunctionNames []string `json:"allowedFunctionNames,omitempty"`
 }
 
 // systemInstruction holds the system prompt as a top-level field.
@@ -302,10 +321,45 @@ func mapRequest(req llm.ChatRequest) geminiRequest {
 		}
 	}
 
+	// Translate tool_choice from OpenAI format to Gemini tool_config.
+	// Our agent sets {"type":"function","function":{"name":"x"}} to force a specific tool.
+	// Gemini uses mode=ANY + allowedFunctionNames instead.
+	// Only set when tools are present -- Gemini rejects tool_config without tools.
+	var toolCfg *toolConfig
+	if req.ToolChoice != nil && len(tools) > 0 {
+		switch tc := req.ToolChoice.(type) {
+		case string:
+			switch tc {
+			case "auto":
+				toolCfg = &toolConfig{FunctionCallingConfig: functionCallingConfig{Mode: "AUTO"}}
+			case "none":
+				toolCfg = &toolConfig{FunctionCallingConfig: functionCallingConfig{Mode: "NONE"}}
+			case "required":
+				// OpenAI "required" means must-call-some-tool -- Gemini ANY is the equivalent.
+				toolCfg = &toolConfig{FunctionCallingConfig: functionCallingConfig{Mode: "ANY"}}
+			}
+		case map[string]any:
+			// {"type":"function","function":{"name":"x"}} -- force a specific function.
+			if tc["type"] == "function" {
+				if fn, ok := tc["function"].(map[string]any); ok {
+					if name, ok := fn["name"].(string); ok && name != "" {
+						toolCfg = &toolConfig{
+							FunctionCallingConfig: functionCallingConfig{
+								Mode:                 "ANY",
+								AllowedFunctionNames: []string{name},
+							},
+						}
+					}
+				}
+			}
+		}
+	}
+
 	return geminiRequest{
 		Contents:          contents,
 		SystemInstruction: sysInst,
 		Tools:             tools,
+		ToolConfig:        toolCfg,
 		GenerationConfig:  genConfig,
 	}
 }
