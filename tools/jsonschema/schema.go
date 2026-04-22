@@ -25,6 +25,14 @@ func GenerateSchema(t reflect.Type) map[string]any {
 		return map[string]any{"type": "boolean"}
 	}
 
+	// Slice/array: recurse into the element type
+	if t.Kind() == reflect.Slice || t.Kind() == reflect.Array {
+		return map[string]any{
+			"type":  "array",
+			"items": GenerateSchema(t.Elem()),
+		}
+	}
+
 	// Complex case: Structs
 	if t.Kind() == reflect.Struct {
 		properties := make(map[string]any)

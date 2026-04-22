@@ -30,6 +30,7 @@ type anthropicRequest struct {
 	System      string             `json:"system,omitempty"`
 	Messages    []anthropicMessage `json:"messages"`
 	Tools       []anthropicTool    `json:"tools,omitempty"`
+	ToolChoice  any                `json:"tool_choice,omitempty"`
 	Temperature float64            `json:"temperature,omitempty"`
 	TopP        float64            `json:"top_p,omitempty"`
 	StopSeqs    []string           `json:"stop_sequences,omitempty"`
@@ -283,12 +284,28 @@ func mapRequest(req llm.ChatRequest) anthropicRequest {
 		maxTokens = 4096
 	}
 
+	// Translate tool_choice from OpenAI format to Anthropic format.
+	// Our agent sets {"type":"function","function":{"name":"x"}}.
+	// Anthropic expects {"type":"tool","name":"x"}.
+	// Only set when tools are present -- Anthropic rejects tool_choice without tools.
+	var toolChoice any
+	if req.ToolChoice != nil && len(tools) > 0 {
+		if tc, ok := req.ToolChoice.(map[string]any); ok {
+			if tc["type"] == "function" {
+				if fn, ok := tc["function"].(map[string]any); ok {
+					toolChoice = map[string]any{"type": "tool", "name": fn["name"]}
+				}
+			}
+		}
+	}
+
 	return anthropicRequest{
 		Model:       req.Model,
 		MaxTokens:   maxTokens,
 		System:      systemPrompt,
 		Messages:    messages,
 		Tools:       tools,
+		ToolChoice:  toolChoice,
 		Temperature: req.Temperature,
 		TopP:        req.TopP,
 		StopSeqs:    req.Stop,
