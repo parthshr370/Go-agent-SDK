@@ -4,6 +4,8 @@
 
 A minimal Go SDK for building AI agents from first principles. Zero external dependencies — just `net/http`, `encoding/json`, and `reflect`.
 
+You can take a look at the roadmap, my motivation, and plans for this project here: [ROADMAP.md](./ROADMAP.md)
+
 ## Features
 
 - **Multi-provider**: Swap between OpenAI, Anthropic, Gemini, or any OpenAI-compatible endpoint by changing one line
